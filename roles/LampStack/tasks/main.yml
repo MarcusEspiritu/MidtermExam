@@ -1,0 +1,8 @@
+---
+# tasks file for LampStack
+# Setup apache2.
+- include: apache2.yml
+
+# Build and install nagios.
+- include: mariadb.yml
+

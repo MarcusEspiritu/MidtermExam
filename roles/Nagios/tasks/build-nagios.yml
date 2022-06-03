@@ -1,0 +1,129 @@
+---
+# Update and install dependent packages.
+  - name: Check if build dependencies are installed
+    command: bash -c "dpkg --get-selections | grep {{ item }}"
+    with_items:
+    - wget
+    - apache2
+    - openssl
+    - perl
+    - gcc
+    - libssl-dev
+    - make
+    - libperl-dev
+    - build-essential
+    - autoconf
+    - gcc
+    - libc6
+    - php
+    - libapache2-mod-php
+    - daemon
+    - apache2-utils
+    - unzip
+    ignore_errors: true
+    register: build_dependencies_installed   
+    
+  - name: Install list of packages
+    apt: name={{ item }} state=present force=yes
+    with_items:
+    - wget
+    - apache2
+    - openssl
+    - perl
+    - gcc
+    - libssl-dev
+    - make
+    - libperl-dev
+    - build-essential
+    - autoconf
+    - gcc
+    - libc6
+    - php
+    - libapache2-mod-php
+    - daemon
+    - apache2-utils
+    - unzip
+    when: build_dependencies_installed is failed
+    
+#Download nagios    
+  - name: Download Nagios Package
+    get_url:
+      url: https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.0.8.tar.gz 
+      dest: /tmp    
+    
+#extract tarfiles of nagios
+  - name: Copy nagios tar file to /tmp location
+    unarchive: src=nagios-4.0.8.tar.gz  dest=/tmp
+    
+    
+#Download and extract tarfiles of nagios core.
+#  - name: download and untar the tarball
+#    become: true
+#    shell: creates=/tmp/nagios wget -O - {{ nagios_tarball }} | tar -xz -C /tmp
+#    shell: creates=/tmp/nagios wget -O - https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.0.8.tar.gz | tar -xz -C /tmp  
+      
+#create group for nagios
+  - name: group for nagios
+    group: name={{ nagios_group }} state=present
+
+  - name: Copy nagios tar file to /tmp location
+    unarchive: src=nagios-4.0.8.tar.gz dest=/tmp 
+
+# Add users to nagcmd group
+  - name: Add users to nagcmd group
+    user: name={{ item }} group={{ nagios_group }}
+    with_items:
+    - nagios
+    - www-data
+
+#executing nagios-core-script
+
+  - name: executing commands to install nagios
+    shell: "{{ item }}"
+    become: yes
+    args: 
+      chdir: /tmp/nagios-4.0.8
+    with_items:
+      - ./configure --with-nagios-user={{ nagios_username }} --with-nagios-group={{ nagios_group }} 
+#      - make all 
+#      - make install
+      - make install-init
+      - make install-config
+      - make install-commandmode
+#    - make install-webconf 
+    
+  - name: Enable modules
+    apache2_module: state=present name={{ item }}
+    with_items:
+    - cgi
+    - rewrite
+
+  - name: Copy files recursively
+    synchronize: src=/tmp/nagios-4.0.8/contrib/eventhandlers/ dest=/usr/local/nagios/libexec recursive=yes mode=push
+    delegate_to: "127.0.0.1"
+
+  - name: Change ownership of files
+    file: path=/usr/local/nagios/libexec/eventhandlers/ owner={{ nagios_username }} group={{nagios_group }} state=directory recurse=yes
+
+#  - name: Start nagios service
+#    systemd:
+#      name: nagios 
+#      state: started
+      
+#  - name: Enable nagios service
+#    systemd:
+#       name: nagios
+#       enabled: yes
+
+#  - name: Set nagios admin password
+#    command: htpasswd -cb /usr/local/nagios/etc/htpasswd.users nagiosadmin {{ nagios_admin_password }}
+
+#restart apache2
+#  - name: restart apache
+#    become: true
+#    systemd: name=apache2 state=restarted
+
+#restart nagios
+#  - name: restart nagios
+#    become: true
+#    systemd: name=nagios state=restarted enabled=yes
